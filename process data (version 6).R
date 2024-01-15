@@ -1,9 +1,6 @@
 # This uses data release 5.0 instead of release 4.0.
 # It adds fMRI variables and more outcome measures, and some other stuff.
 # In this version, the data are NOT standardized (z-scored).
-# This is because people insist that doing ANY pre-processing (including something as simple
-# as standardization) on the training set that includes information about the test set
-# is a no-no.
 # Also, outcome data are now provided at the three year and four year followups,
 # not just the two year followup as before.
 # 9/12: Added conduct disorder.
