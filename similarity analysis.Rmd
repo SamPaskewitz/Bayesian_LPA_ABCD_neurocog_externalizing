@@ -1,0 +1,58 @@
+---
+title: "similarity analysis"
+output: html_document
+date: "2024-01-02"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+profile_similarity = function(lpa_model){
+  # compute similarity
+  phi = lpa_model$z
+  pi = lpa_model$parameters$pro
+  pi_order = order(pi, decreasing = TRUE)
+  #cutoff = which(cumsum(pi[pi_order]) >= cutoff_proportion)[1] # profiles 1:cutoff contain cutoff_proportion of the sample
+  #m_mu = lpa_model$parameters$mean[, pi_order[1:cutoff]]
+  m_mu = lpa_model$parameters$mean[, pi_order]
+  xi_est = 1/diag(lpa_model$parameters$variance$Sigma) # DOUBLE CHECK THIS
+  distance = dist(t(sqrt(xi_est)*m_mu), upper = TRUE) # DOUBLE CHECK FORMULA
+  similarity = exp(-0.5*distance^2)
+  #sim_without_diag = as.matrix(similarity) - 999*diag(cutoff)
+  sim_without_diag = as.matrix(similarity) - 999*diag(length(pi))
+  most_similar_pair = which(sim_without_diag == max(sim_without_diag), arr.ind = TRUE)[1, 1:2]
+  
+  # make plot of two most similar profiles
+  plot_data = stack(data.frame(t(m_mu[, most_similar_pair])))
+  plot_data$profile = most_similar_pair
+  prplot = ggplot(data = plot_data, aes(x = ind, y = values)) + geom_col() + facet_wrap(~profile, ncol = 2) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + xlab('variable') + ylab('mu')
+  print(mean(similarity))
+  
+  return(list(similarity = similarity,
+              distance = distance,
+              min_distance = min(distance),
+              max_similarity = max(similarity),
+              most_similar_pair = most_similar_pair,
+              most_similar_pair_means = lpa_model$parameters$mean[, pi_order[most_similar_pair]],
+              mean_similarity = mean(similarity),
+              mean_distance = mean(distance),
+              plot = prplot))
+}
+
+```
+
+```{r}
+sim_results = data.frame(n_profiles = 2:20)
+for(i in 2:20){
+  sim = profile_similarity(class.eval[[paste0('model_1_class_', i)]]$model)
+  sim_results[sim_results$n_profiles == i, 'mean similarity'] = sim$mean_similarity
+  sim_results[sim_results$n_profiles == i, 'max similarity'] = sim$max_similarity
+  sim_results[sim_results$n_profiles == i, 'mean distance'] = sim$mean_distance
+  sim_results[sim_results$n_profiles == i, 'minimum distance'] = sim$min_distance
+}
+write.csv(sim_results, 'conventional LPA similarity results by n profiles.csv')
+round(sim_results, 4)
+```
