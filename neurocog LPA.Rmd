@@ -1,0 +1,122 @@
+---
+title: "ABCD neurocognitive data LPA"
+author: "Sam Paskewitz"
+date: "06/09/2023"
+output: 
+  html_document:
+    toc: TRUE
+    toc_float: TRUE
+    theme: lumen
+---
+
+```{r set_libraries, include=FALSE, tidy=TRUE}
+#detach("package:psych", unload = TRUE)
+require(tidyverse)
+require(corrplot)
+require(rmarkdown)
+require(tidyLPA)
+require(dplyr)
+library(ggplot2)
+```
+
+```{r read_in_files, include=FALSE, tidy=TRUE}
+x = read.csv("/Users/sampaskewitz/Documents/ABCD data processing/complete data sets (z-scored etc)/task behavioral data (2-year z-scored full data).csv",
+             row.names = 1) # neurocognitive task data
+
+info = read.csv("/Users/sampaskewitz/Documents/ABCD data processing/processed data (release 5.0)/ABCD 2-year demographic info etc.csv",
+             row.names = 1) # info data (demographics etc)
+
+y = read.csv("/Users/sampaskewitz/Documents/ABCD data processing/complete data sets (z-scored etc)/outcome data (2-year z-scored full data).csv",
+             row.names = 1) # outcome data (except substance use)
+
+y_binary = read.csv("/Users/sampaskewitz/Documents/ABCD data processing/complete data sets (z-scored etc)/outcome data (2-year binary vars full data).csv",
+                    row.names = 1) # outcome data (binary outcomes such as substance use)
+
+y_3year = read.csv("/Users/sampaskewitz/Documents/ABCD data processing/complete data sets (z-scored etc)/outcome data (3-year z-scored full data).csv",
+                   row.names = 1) # 3-year outcome data (except substance use)
+
+# EXCLUDE PEOPLE WITH MISSING DATA (> 0 MISSING).
+number_missing = rowSums(is.na(x))
+keep = number_missing == 0
+x = x[keep,]
+y = y[keep,]
+info = info[keep,]
+y_binary = y_binary[keep,]
+y_3year = y_3year[keep,]
+n = nrow(y)
+
+print(paste('n =', n))
+print(round(100*table(info$race_ethnicity)/n, 1))
+print(round(100*table(info$sex)/n, 1))
+```
+## **Evaluate fit statistics for different profiles**
+### Equal variances and covariance fixed to 0 (default)
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+set.seed(838)
+class.eval <- x %>%
+  #na.omit() %>% # ***** only using about half of the data *****
+  #single_imputation() %>% ##only if missing data
+  #scale() %>% 
+  estimate_profiles(1:20)
+
+LPA.fit<-get_fit(class.eval)
+#LPA.fit
+
+# NOTES
+# -----
+# class.eval$model_1_class_10$model$z seems to represent individual profile probs (CHECK)
+# class.eval$model_1_class_10$model$parameters$pro seems to represent profile base rates (CHECK)
+```
+
+```{r}
+fit_stats = data.frame(print(class.eval))
+fit_stats$Classes = as.integer(fit_stats$Classes)
+fit_stats$AIC = as.numeric(fit_stats$AIC)
+fit_stats$Entropy = as.numeric(fit_stats$Entropy)
+for(i in 1:20){
+  fit_stats[i, 'log-likelihood'] = class.eval[[paste0('model_1_class_', i)]]$fit[['LogLik']]
+}
+
+write.csv(fit_stats, 'conventional LPA fit stats.csv')
+View(fit_stats)
+```
+
+```{r}
+compute_entropy_stat = function(lpa_model){
+  phi = lpa_model$z
+  n = nrow(phi)
+  T = ncol(phi)
+  H = 0.0
+  for(i in 1:n){
+    H = H - sum(phi[i,]*log(phi[i,]))
+  }
+  max_H = n*log(T)
+  return(1 - H/max_H)
+}
+```
+
+```{r}
+compute_entropy_stat(class.eval$model_1_class_6$model)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# PLOT ESTIMATED PROFILE MEANS (4 PROFILE SOLUTION)
+phi = class.eval$model_1_class_4$model$z
+pi = class.eval$model_1_class_4$model$parameters$pro
+pi_order = order(class.eval$model_1_class_4$model$parameters$pro, decreasing = TRUE)
+print(round(pi[pi_order], 2))
+plot_data = stack(data.frame(t(class.eval$model_1_class_4$model$parameters$mean[, pi_order[1:4]])))
+plot_data$profile = 1:4
+ggplot(data = plot_data, aes(x = ind, y = values)) + geom_col() + facet_wrap(~profile, ncol = 4) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + ylab('mu') + xlab('variable') + ggtitle('4 profile model')
+```
+
+```{r}
+# PLOT ESTIMATED PROFILE MEANS (20 PROFILE SOLUTION)
+phi = class.eval$model_1_class_20$model$z
+pi = class.eval$model_1_class_20$model$parameters$pro
+pi_order = order(class.eval$model_1_class_20$model$parameters$pro, decreasing = TRUE)
+print(round(pi[pi_order], 2))
+plot_data = stack(data.frame(t(class.eval$model_1_class_20$model$parameters$mean[, pi_order[1:10]])))
+plot_data$profile = 1:10
+ggplot(data = plot_data, aes(x = ind, y = values)) + geom_col() + facet_wrap(~profile, ncol = 5) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + ylab('mu') + xlab('variable') + ggtitle('20 profile model (first 10 profiles)')
+```
